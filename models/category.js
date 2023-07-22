@@ -1,25 +1,20 @@
 const DataTypes = require('sequelize');
 const { Model } = DataTypes;
 
-module.exports = class User extends Model {
+module.exports = class Category extends Model {
     static init(sequelize) {
         return super.init(
             {
-                email: {
+                name: {
                     type: DataTypes.STRING(30), // STRING, TEXT, BOOLEAN, INTEGER, FLOAT, DATETIME
                     allowNull: false, // 필수
                     unique: true, // 고유한 값
                 },
-
-                password: {
-                    type: DataTypes.STRING(100),
-                    allowNull: false, // 필수
-                },
             },
             {
-                modelName: 'User',
-                tableName: 'users',
-                paranoid: true,
+                modelName: 'Category',
+                tableName: 'categorys',
+                paranoid: false,
                 charset: 'utf8',
                 collate: 'utf8_general_ci', // 한글 저장
                 sequelize,
@@ -27,6 +22,6 @@ module.exports = class User extends Model {
         );
     }
     static associate(db) {
-        db.User.hasMany(db.Stock, { as: 'user_id', foreignKey: 'user_id' });
+        db.Category.hasMany(db.Stock, { as: 'category_id', foreignKey: 'category_id' });
     }
 };
