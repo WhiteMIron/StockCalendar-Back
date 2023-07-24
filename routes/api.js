@@ -11,6 +11,7 @@ const { isNotLoggedIn, isLoggedIn } = require('./middlewares');
 const User = require('../models/user');
 const Stock = require('../models/stock');
 const Category = require('../models/category');
+const Interest = require('../models/interest');
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ const axios = require('axios');
 const iconv = require('iconv-lite');
 const cheerio = require('cheerio');
 
-const regex = /[^0-9 | . | % |]/g;
+const regex = /[^0-9 | . | % | ,|+|-]/g;
 const daysRangeRegex = /[^0-9 |.] /g;
 const moment = require('moment');
 
@@ -43,7 +44,7 @@ const parsing = async (code) => {
     const name = $('#middle > div.h_company > div.wrap_company > h2 > a').text();
     const currentPrice = $('#_nowVal').text().replace(regex, '');
     const daysRange = $('#_rate > span').text().replace(regex, '');
-
+    const diffPrice = $('#_diff > span').text().replace(regex, '');
     const previousClose = $(
         '#content > div.section.inner_sub > div:nth-child(1) > table > tbody > tr:nth-child(3) > td:nth-child(4) > span'
     )
@@ -52,6 +53,7 @@ const parsing = async (code) => {
 
     let info = {
         name: name,
+        diffPrice: diffPrice,
         currentPrice: currentPrice,
         daysRange: daysRange,
         previousClose: previousClose,
@@ -59,80 +61,119 @@ const parsing = async (code) => {
     return info;
 };
 
-router.post('/test', async (req, res, next) => {
-    const { code, categoryName } = req.body;
-    let category;
-    try {
-        info = await parsing(code);
+const isEmpty = function (value) {
+    if (
+        value == '' ||
+        value == null ||
+        value == undefined ||
+        (value != null && typeof value == 'object' && !Object.keys(value).length)
+    ) {
+        return true;
+    } else {
+        return false;
+    }
+};
 
-        const exCategory = await Category.findOne({
+router.get('/interest', async (req, res, next) => {
+    const { user } = req;
+    const { code } = req.query;
+    let interest;
+    if (isEmpty(code)) {
+        interest = await interest.findAll({
             where: {
-                name: categoryName,
-            },
-        });
-        if (!exCategory) {
-            category = await Category.create({
-                name: categoryName,
-            });
-        } else {
-            category = exCategory;
-        }
-        const exUser = await User.findOne({
-            where: {
-                email: 'test2@test.com',
-            },
-        });
-
-        const exStock = await Stock.findOne({
-            where: {
-                name: info.name,
-                register_date: moment().format('YYYY/MM/DD'),
+                user_id: user.id,
+                stock_id: stock.id,
             },
             include: [
                 {
                     model: User,
                     where: {
-                        email: 'test2@test.com',
+                        email: user.email,
                     },
                 },
             ],
         });
-        if (exStock) {
-            return res.status(403).send('이미 등록되어있는 주식입니다.');
-        }
-
-        const stock = await Stock.create({
-            name: info.name,
-            current_price: info.currentPrice,
-            previous_close: info.previousClose,
-            days_range: info.daysRange,
-            user_id: exUser.id,
-            category_id: category.id,
-            register_date: moment().format('YYYY/MM/DD'),
+    } else {
+        interest = await interest.findOne({
+            where: {
+                user_id: user.id,
+            },
+            include: [
+                {
+                    model: Stock,
+                    where: {
+                        stock_code: code,
+                    },
+                },
+            ],
         });
-        res.status(201).send(stock);
+    }
+    //종목코드로 조회하는게 있어야할듯?
+
+    res.status(200).send(stock);
+});
+
+router.post('/interest', async (req, res, next) => {
+    const { code } = req.body;
+    // const { user } = req;
+    let category;
+
+    try {
+        // const stock = await Stock.findOne({
+        //     where: {
+        //         name: info.name,
+        //     },
+        //     include: [
+        //         {
+        //             model: User,
+        //             where: {
+        //                 email: user.email,
+        //             },
+        //         },
+        //     ],
+        // });
+        const exInterest = await Interest.findOne({
+            where: {
+                user_id: 1,
+                stock_id: 1,
+            },
+        });
+        if (exInterest) {
+            res.status(403).send('이미 관심등록된 종목입니다.');
+        } else {
+            const interest = await Interest.create({
+                user_id: 1,
+                stock_id: 1,
+            });
+            res.status(201).send();
+        }
     } catch (error) {
         next(error);
     }
 });
 
-router.get('/stock', async (req, res, next) => {
+router.get('/stock', isLoggedIn, async (req, res, next) => {
+    const { user } = req;
+    const { date } = req.query;
     const stock = await Stock.findAll({
         where: {
-            user_id: 2,
-            register_date: moment().format('YYYY/MM/DD'),
+            user_id: user.id,
+            register_date: date,
         },
     });
+
     res.status(200).send(stock);
 });
 
-router.post('/stock', isNotLoggedIn, async (req, res, next) => {
-    const { code, categoryName } = req.body;
+router.post('/stock', isLoggedIn, async (req, res, next) => {
+    const { code, categoryName, date, isInterest } = req.body;
     const { user } = req;
     let category;
     try {
         info = await parsing(code);
-
+        if (isEmpty(info.name)) {
+            return res.status(403).send('잘못된 종목코드입니다.');
+        }
         const exCategory = await Category.findOne({
             where: {
                 name: categoryName,
@@ -145,16 +186,10 @@ router.post('/stock', isNotLoggedIn, async (req, res, next) => {
         } else {
             category = exCategory;
         }
-        const exUser = await User.findOne({
-            where: {
-                email: user.email,
-            },
-        });
-
         const exStock = await Stock.findOne({
             where: {
                 name: info.name,
-                register_date: moment().format('YYYY/MM/DD'),
+                register_date: date,
             },
             include: [
                 {
@@ -171,12 +206,14 @@ router.post('/stock', isNotLoggedIn, async (req, res, next) => {
 
         const stock = await Stock.create({
             name: info.name,
+            stock_code: code,
             current_price: info.currentPrice,
             previous_close: info.previousClose,
+            diff_price: info.diffPrice,
             days_range: info.daysRange,
-            user_id: exUser.id,
+            user_id: user.id,
             category_id: category.id,
-            register_date: moment().format('YYYY/MM/DD'),
+            register_date: date,
         });
         res.status(201).send(stock);
     } catch (error) {

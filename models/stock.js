@@ -16,6 +16,10 @@ module.exports = class Stock extends Model {
                     // 고유한 값
                 },
 
+                stock_code: {
+                    type: DataTypes.STRING(30), // STRING, TEXT, BOOLEAN, INTEGER, FLOAT, DATETIME
+                    allowNull: false, // 필수
+                },
                 current_price: {
                     type: DataTypes.STRING(100),
                     allowNull: false, // 필수
@@ -33,6 +37,18 @@ module.exports = class Stock extends Model {
                 register_date: {
                     type: DataTypes.STRING(100),
                     allowNull: false, // 필수,
+                },
+                news: {
+                    type: DataTypes.STRING(1000),
+                    allowNull: true, // 필수,
+                },
+                issue: {
+                    type: DataTypes.STRING(500),
+                    allowNull: true,
+                },
+                diff_price: {
+                    type: DataTypes.STRING(100),
+                    allowNull: false, // 필수
                 },
             },
             {
