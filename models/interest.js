@@ -16,7 +16,8 @@ module.exports = class Interest extends Model {
         );
     }
     static associate(db) {
-        db.Interest.belongsTo(db.User, { foreignKey: 'user_id' });
-        db.Interest.belongsTo(db.Stock, { foreignKey: 'stock_id' });
+        // db.Interest.belongsTo(db.User, { foreignKey: 'user_id' });
+        // db.Interest.belongsTo(db.Stock, { foreignKey: 'stock_id' });
+        db.Interest.hasMany(db.Stock, { as: 'interest_id', foreignKey: 'interest_id' });
     }
 };

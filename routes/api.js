@@ -27,8 +27,7 @@ const headers = {
     responseType: 'arraybuffer',
 };
 const url = 'https://finance.naver.com/item/sise.naver?code=';
-
-const getHTML = async (code) => {
+const getHTML = async (code, page) => {
     try {
         return await axios.get(url + code, headers);
     } catch (error) {
@@ -39,7 +38,6 @@ const getHTML = async (code) => {
 const parsing = async (code) => {
     const html = await getHTML(code);
     const content = iconv.decode(html.data, 'EUC-KR');
-
     const $ = cheerio.load(content);
     const name = $('#middle > div.h_company > div.wrap_company > h2 > a').text();
     const currentPrice = $('#_nowVal').text().replace(regex, '');
@@ -61,6 +59,22 @@ const parsing = async (code) => {
     return info;
 };
 
+const cmpToday = async (date) => {
+    let result = moment(moment().format('YYYY-MM-DD')).isSame(
+        moment('2023/07/26'.replaceAll('/', '-'))
+    );
+    return result;
+};
+
+router.get('/test', async (req, res, next) => {
+    try {
+        console.log(await cmpToday('2023/07/26'));
+        date = res.status(200).send();
+    } catch (error) {
+        next(error);
+    }
+});
+
 const isEmpty = function (value) {
     if (
         value == '' ||
@@ -74,82 +88,28 @@ const isEmpty = function (value) {
     }
 };
 
-router.get('/interest', async (req, res, next) => {
+//수정용
+router.get('/interest', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     const { code } = req.query;
-    let interest;
-    if (isEmpty(code)) {
-        interest = await interest.findAll({
-            where: {
-                user_id: user.id,
-                stock_id: stock.id,
+    let isInterest;
+    const stock = await Stock.findOne({
+        where: {
+            user_id: user.id,
+            user_id: 1,
+
+            stock_code: code,
+            interest_id: {
+                [Op.ne]: null, //값이 null인 걸 제외하고 찾아준다
             },
-            include: [
-                {
-                    model: User,
-                    where: {
-                        email: user.email,
-                    },
-                },
-            ],
-        });
+        },
+    });
+    if (isEmpty(stock)) {
+        isInterest = false;
     } else {
-        interest = await interest.findOne({
-            where: {
-                user_id: user.id,
-            },
-            include: [
-                {
-                    model: Stock,
-                    where: {
-                        stock_code: code,
-                    },
-                },
-            ],
-        });
+        isInterest = true;
     }
-    //종목코드로 조회하는게 있어야할듯?
-
-    res.status(200).send(stock);
-});
-
-router.post('/interest', async (req, res, next) => {
-    const { code } = req.body;
-    // const { user } = req;
-    let category;
-
-    try {
-        // const stock = await Stock.findOne({
-        //     where: {
-        //         name: info.name,
-        //     },
-        //     include: [
-        //         {
-        //             model: User,
-        //             where: {
-        //                 email: user.email,
-        //             },
-        //         },
-        //     ],
-        // });
-        const exInterest = await Interest.findOne({
-            where: {
-                user_id: 1,
-                stock_id: 1,
-            },
-        });
-        if (exInterest) {
-            res.status(403).send('이미 관심등록된 종목입니다.');
-        } else {
-            const interest = await Interest.create({
-                user_id: 1,
-                stock_id: 1,
-            });
-            res.status(201).send();
-        }
-    } catch (error) {
-        next(error);
-    }
+    res.status(200).send({ isInterest: isInterest });
 });
 
 router.get('/stock', isLoggedIn, async (req, res, next) => {
@@ -160,33 +120,65 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
             user_id: user.id,
             register_date: date,
         },
+        include: [
+            {
+                model: Category,
+            },
+            { model: Interest },
+        ],
     });
 
     res.status(200).send(stock);
 });
 
 router.post('/stock', isLoggedIn, async (req, res, next) => {
-    const { code, categoryName, date, isInterest } = req.body;
+    const {
+        code,
+        categoryName,
+        date,
+        isInterest,
+        diffPrice,
+        currentPrice,
+        daysRange,
+        previousClose,
+        news,
+    } = req.body;
     const { user } = req;
     let category;
+    let info;
+    let exInterest;
+    let interestId;
+    let exStock;
     try {
         info = await parsing(code);
+        if (!cmpToday(date)) {
+            info = {
+                previousClose: previousClose,
+                daysRange: daysRange,
+                currentPrice: currentPrice,
+                diffPrice: diffPrice,
+            };
+        }
+
         if (isEmpty(info.name)) {
             return res.status(403).send('잘못된 종목코드입니다.');
         }
-        const exCategory = await Category.findOne({
-            where: {
-                name: categoryName,
-            },
-        });
-        if (!exCategory) {
-            category = await Category.create({
-                name: categoryName,
+
+        if (!isEmpty(categoryName)) {
+            const exCategory = await Category.findOne({
+                where: {
+                    name: categoryName,
+                },
             });
-        } else {
-            category = exCategory;
+            if (!exCategory) {
+                category = await Category.create({
+                    name: categoryName,
+                });
+            } else {
+                category = exCategory;
+            }
         }
-        const exStock = await Stock.findOne({
+        exStock = await Stock.findOne({
             where: {
                 name: info.name,
                 register_date: date,
@@ -195,13 +187,37 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
                 {
                     model: User,
                     where: {
-                        email: user.email,
+                        id: user.id,
                     },
                 },
             ],
         });
         if (exStock) {
             return res.status(403).send('이미 등록되어있는 주식입니다.');
+        }
+        exInterest = await Stock.findOne({
+            where: {
+                name: info.name,
+                user_id: user.id,
+                interest_id: {
+                    [Op.ne]: null, //값이 null인 걸 제외하고 찾아준다
+                },
+            },
+        });
+
+        if (isInterest) {
+            if (isEmpty(exInterest)) {
+                interest = await Interest.create({});
+                interestId = interest.id;
+            } else {
+                interestId = exInterest.interest_id;
+            }
+        } else {
+            if (!isEmpty(exInterest)) {
+                await Interest.destroy({
+                    where: { id: exInterest.interest_id },
+                });
+            }
         }
 
         const stock = await Stock.create({
@@ -214,8 +230,18 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
             user_id: user.id,
             category_id: category.id,
             register_date: date,
+            news: news,
+            interest_id: interestId,
         });
-        res.status(201).send(stock);
+        const data = stock.get({ plain: true });
+        data.category = category.get({ plain: true });
+        if (isInterest) {
+            data.isInterest = true;
+        } else {
+            data.isInterest = false;
+        }
+        console.log(data);
+        res.status(201).send(data);
     } catch (error) {
         next(error);
     }
