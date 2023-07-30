@@ -12,6 +12,7 @@ const User = require('../models/user');
 const Stock = require('../models/stock');
 const Category = require('../models/category');
 const Interest = require('../models/interest');
+const Summary = require('../models/summary');
 
 const router = express.Router();
 
@@ -23,11 +24,11 @@ const regex = /[^0-9 | . | % | ,|+|-]/g;
 const daysRangeRegex = /[^0-9 |.] /g;
 const moment = require('moment');
 
-const headers = {
-    responseType: 'arraybuffer',
-};
-const url = 'https://finance.naver.com/item/sise.naver?code=';
 const getHTML = async (code, page) => {
+    const headers = {
+        responseType: 'arraybuffer',
+    };
+    const url = 'https://finance.naver.com/item/sise.naver?code=';
     try {
         return await axios.get(url + code, headers);
     } catch (error) {
@@ -93,42 +94,129 @@ router.get('/interest', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     const { code } = req.query;
     let isInterest;
-    const stock = await Stock.findOne({
-        where: {
-            user_id: user.id,
-            user_id: 1,
 
-            stock_code: code,
-            interest_id: {
-                [Op.ne]: null, //값이 null인 걸 제외하고 찾아준다
+    try {
+        const stock = await Stock.findOne({
+            where: {
+                user_id: user.id,
+                user_id: 1,
+
+                stock_code: code,
+                interest_id: {
+                    [Op.ne]: null, //값이 null인 걸 제외하고 찾아준다
+                },
             },
-        },
-    });
-    if (isEmpty(stock)) {
-        isInterest = false;
-    } else {
-        isInterest = true;
+        });
+        if (isEmpty(stock)) {
+            isInterest = false;
+        } else {
+            isInterest = true;
+        }
+        res.status(200).send({ isInterest: isInterest });
+    } catch (error) {
+        console.error(error);
+        next(error); // status 500}
     }
-    res.status(200).send({ isInterest: isInterest });
 });
 
 router.get('/stock', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     const { date } = req.query;
-    const stock = await Stock.findAll({
-        where: {
-            user_id: user.id,
-            register_date: date,
-        },
-        include: [
-            {
-                model: Category,
-            },
-            { model: Interest },
-        ],
-    });
 
-    res.status(200).send(stock);
+    try {
+        const stock = await Stock.findAll({
+            where: {
+                user_id: user.id,
+                register_date: date,
+            },
+            include: [
+                {
+                    model: Category,
+                },
+                { model: Interest },
+            ],
+        });
+
+        res.status(200).send(stock);
+    } catch (error) {
+        console.error(error);
+        next(error); // status 500}
+    }
+});
+
+router.get('/stock-by-year-month', async (req, res, next) => {
+    const { user } = req;
+    const { date } = req.query;
+
+    try {
+        const stock = await Stock.findAll({
+            where: {
+                user_id: user.id,
+                register_date: {
+                    [Op.like]: '%' + date + '%',
+                },
+            },
+        });
+
+        res.status(200).send(stock);
+    } catch (error) {
+        console.error(error);
+        next(error); // status 500}
+    }
+});
+
+router.get('/summary', isLoggedIn, async (req, res, next) => {
+    const { user } = req;
+    const { date } = req.query;
+
+    try {
+        const summary = await Summary.findOne({
+            where: {
+                user_id: user.id,
+                date: date,
+            },
+        });
+
+        res.status(200).send(summary);
+    } catch (error) {
+        console.error(error);
+        next(error); // status 500}
+    }
+});
+
+router.post('/summary', isLoggedIn, async (req, res, next) => {
+    const { user } = req;
+    const { content, date } = req.body;
+    let summary;
+    try {
+        const exSummary = await Summary.findOne({
+            where: {
+                user_id: user.id,
+                date: date,
+            },
+        });
+
+        if (exSummary) {
+            await Summary.update({ content: content }, { where: { id: exSummary.id } });
+
+            summary = await Summary.findOne({
+                where: {
+                    user_id: user.id,
+                    date: date,
+                },
+            });
+        } else {
+            summary = await Summary.create({
+                user_id: user.id,
+                date: date,
+                content: content,
+            });
+        }
+        res.status(201).send(summary);
+    } catch (error) {
+        console.error(error);
+        next(error); // status 500
+    }
 });
 
 router.post('/stock', isLoggedIn, async (req, res, next) => {
@@ -142,6 +230,7 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
         daysRange,
         previousClose,
         news,
+        issue,
     } = req.body;
     const { user } = req;
     let category;
@@ -232,9 +321,10 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
             register_date: date,
             news: news,
             interest_id: interestId,
+            issue: issue,
         });
         const data = stock.get({ plain: true });
-        data.category = category.get({ plain: true });
+        data.Category = category.get({ plain: true });
         if (isInterest) {
             data.isInterest = true;
         } else {

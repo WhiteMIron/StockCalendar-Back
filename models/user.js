@@ -28,5 +28,6 @@ module.exports = class User extends Model {
     }
     static associate(db) {
         db.User.hasMany(db.Stock, { as: 'user_id', foreignKey: 'user_id' });
+        db.User.hasMany(db.Summary, { foreignKey: 'user_id' });
     }
 };

@@ -62,8 +62,6 @@ module.exports = class Stock extends Model {
         );
     }
     static associate(db) {
-        // db.Stock.belongsTo(db.User, { foreignKey: 'user_id', sourceKey: 'id' });
-        // db.Stock.belongsTo(db.Category, { foreignKey: 'category_id', sourceKey: 'id' });
         db.Stock.belongsTo(db.User, { foreignKey: 'user_id' });
         db.Stock.belongsTo(db.Category, { foreignKey: 'category_id' });
         db.Stock.belongsTo(db.Interest, { foreignKey: 'interest_id' });
