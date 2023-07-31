@@ -337,6 +337,85 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
     }
 });
 
+router.put('/stock', isLoggedIn, async (req, res, next) => {
+    const { id, categoryName, isInterest, news, issue } = req.body;
+    const { user } = req;
+    let category;
+    let info;
+    let exInterest;
+    let interestId;
+    let stock;
+    try {
+        const exCategory = await Category.findOne({
+            where: {
+                name: categoryName,
+            },
+        });
+        if (!exCategory) {
+            category = await Category.create({
+                name: categoryName,
+            });
+        } else {
+            category = exCategory;
+        }
+        // if (exStock) {
+        //     return res.status(403).send('이미 등록되어있는 주식입니다.');
+        // }
+
+        exInterest = await Stock.findOne({
+            where: {
+                id: id,
+                interest_id: {
+                    [Op.ne]: null, //값이 null인 걸 제외하고 찾아준다
+                },
+            },
+        });
+
+        if (isInterest) {
+            if (isEmpty(exInterest)) {
+                interest = await Interest.create({});
+                interestId = interest.id;
+            } else {
+                interestId = exInterest.interest_id;
+            }
+        } else {
+            if (!isEmpty(exInterest)) {
+                await Interest.destroy({
+                    where: { id: exInterest.interest_id },
+                });
+            }
+        }
+
+        //관심이랑 카테고리 다 준비하고
+        await Stock.update(
+            {
+                news: news,
+                interest_id: interestId,
+                category_id: category.id,
+                issue: issue,
+            },
+            { where: { id: id } }
+        );
+
+        stock = await Stock.findOne({
+            where: {
+                id: id,
+            },
+        });
+
+        const data = stock.get({ plain: true });
+        data.Category = category.get({ plain: true });
+        if (isInterest) {
+            data.isInterest = true;
+        } else {
+            data.isInterest = false;
+        }
+        res.status(200).send(data);
+    } catch (error) {
+        next(error);
+    }
+});
+
 router.get('/users', (req, res, next) => {
     return res.json(req.user || false);
 });
