@@ -118,53 +118,6 @@ router.get('/interest', isLoggedIn, async (req, res, next) => {
         next(error); // status 500}
     }
 });
-
-router.get('/stock', isLoggedIn, async (req, res, next) => {
-    const { user } = req;
-    const { date } = req.query;
-
-    try {
-        const stock = await Stock.findAll({
-            where: {
-                user_id: user.id,
-                register_date: date,
-            },
-            include: [
-                {
-                    model: Category,
-                },
-                { model: Interest },
-            ],
-        });
-
-        res.status(200).send(stock);
-    } catch (error) {
-        console.error(error);
-        next(error); // status 500}
-    }
-});
-
-router.get('/stock-by-year-month', async (req, res, next) => {
-    const { user } = req;
-    const { date } = req.query;
-
-    try {
-        const stock = await Stock.findAll({
-            where: {
-                user_id: user.id,
-                register_date: {
-                    [Op.like]: '%' + date + '%',
-                },
-            },
-        });
-
-        res.status(200).send(stock);
-    } catch (error) {
-        console.error(error);
-        next(error); // status 500}
-    }
-});
-
 router.get('/summary', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     const { date } = req.query;
@@ -216,6 +169,52 @@ router.post('/summary', isLoggedIn, async (req, res, next) => {
     } catch (error) {
         console.error(error);
         next(error); // status 500
+    }
+});
+
+router.get('/stock', isLoggedIn, async (req, res, next) => {
+    const { user } = req;
+    const { date } = req.query;
+
+    try {
+        const stock = await Stock.findAll({
+            where: {
+                user_id: user.id,
+                register_date: date,
+            },
+            include: [
+                {
+                    model: Category,
+                },
+                { model: Interest },
+            ],
+        });
+
+        res.status(200).send(stock);
+    } catch (error) {
+        console.error(error);
+        next(error); // status 500}
+    }
+});
+
+router.get('/stock-by-year-month', async (req, res, next) => {
+    const { user } = req;
+    const { date } = req.query;
+
+    try {
+        const stock = await Stock.findAll({
+            where: {
+                user_id: user.id,
+                register_date: {
+                    [Op.like]: '%' + date + '%',
+                },
+            },
+        });
+
+        res.status(200).send(stock);
+    } catch (error) {
+        console.error(error);
+        next(error); // status 500}
     }
 });
 
@@ -337,6 +336,17 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
     }
 });
 
+router.delete('/stock/:id', isLoggedIn, async (req, res, next) => {
+    const { user } = req;
+    const { id } = req.params;
+    try {
+        await Stock.destroy({ where: { id: id, user_id: user.id } });
+        res.status(200).send('ok');
+    } catch (error) {
+        next(error);
+    }
+});
+
 router.put('/stock', isLoggedIn, async (req, res, next) => {
     const { id, categoryName, isInterest, news, issue } = req.body;
     const { user } = req;
@@ -358,9 +368,6 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
         } else {
             category = exCategory;
         }
-        // if (exStock) {
-        //     return res.status(403).send('이미 등록되어있는 주식입니다.');
-        // }
 
         exInterest = await Stock.findOne({
             where: {
@@ -386,7 +393,6 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
             }
         }
 
-        //관심이랑 카테고리 다 준비하고
         await Stock.update(
             {
                 news: news,
@@ -430,7 +436,8 @@ router.post('/users', isNotLoggedIn, async (req, res, next) => {
             return res.status(403).send('이미 사용 중인 아이디입니다.');
         }
         const hashedPassword = await bcrypt.hash(req.body.password, 12);
-        const user = await User.create({
+
+        await User.create({
             email: req.body.email,
             password: hashedPassword,
         });
