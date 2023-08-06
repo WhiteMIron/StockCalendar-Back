@@ -16,19 +16,24 @@ const Interest = require('../models/interest');
 const Summary = require('../models/summary');
 
 const router = express.Router();
-const { getWhereClause, isConsonants } = require('../util/search');
-const { parsing } = require('../util/stock');
+const { getWhereClause } = require('../util/search');
+const { parsing, calDiffPercent, calDiffPrice } = require('../util/stock');
 const { cmpToday } = require('../util/common');
 //record 페이지 로딩시 데이터 있는 거 반환하는 용도
 
-router.get('/record-search', async (req, res, next) => {
+router.get('/record-all-search', async (req, res, next) => {
     const { user } = req;
+    const { startDate } = req.query;
+    console.log(startDate);
     try {
         const { user } = req;
         let stocks = await Stock.findAll({
             attributes: ['register_date'],
             where: {
                 user_id: user.id,
+                register_date: {
+                    [Op.like]: '%' + startDate + '%',
+                },
             },
         });
         stocks = _.uniqBy(stocks, 'register_date');
@@ -216,18 +221,8 @@ router.get('/stock-by-year-month', async (req, res, next) => {
 });
 
 router.post('/stock', isLoggedIn, async (req, res, next) => {
-    const {
-        code,
-        categoryName,
-        date,
-        isInterest,
-        diffPrice,
-        currentPrice,
-        daysRange,
-        previousClose,
-        news,
-        issue,
-    } = req.body;
+    const { code, categoryName, date, isInterest, news, issue, currentPrice, previousClose } =
+        req.body;
     const { user } = req;
     let category;
     let info;
@@ -237,14 +232,13 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
     try {
         info = await parsing(code);
         if (!cmpToday(date)) {
-            info = {
-                previousClose: previousClose,
-                daysRange: daysRange,
-                currentPrice: currentPrice,
-                diffPrice: diffPrice,
-            };
+            info.previousClose = previousClose;
+            info.currentPrice = currentPrice;
+            info.diffPercent = calDiffPercent(currentPrice, previousClose) + '%';
+            info.diffPrice = calDiffPrice(currentPrice, previousClose);
         }
 
+        console.log(info);
         if (isEmpty(info.name)) {
             return res.status(403).send('잘못된 종목코드입니다.');
         }
@@ -308,10 +302,11 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
         const stock = await Stock.create({
             name: info.name,
             stock_code: code,
+
             current_price: info.currentPrice,
-            previous_close: info.previousClose,
             diff_price: info.diffPrice,
-            days_range: info.daysRange,
+            diff_percent: info.diffPercent,
+            previous_close: info.previousClose,
             user_id: user.id,
             category_id: category.id,
             register_date: date,
@@ -345,10 +340,8 @@ router.delete('/stock/:id', isLoggedIn, async (req, res, next) => {
 });
 
 router.put('/stock', isLoggedIn, async (req, res, next) => {
-    const { id, categoryName, isInterest, news, issue } = req.body;
-    const { user } = req;
+    const { id, categoryName, isInterest, news, issue, currentPrice, diffPrice } = req.body;
     let category;
-    let info;
     let exInterest;
     let interestId;
     let stock;
@@ -390,15 +383,29 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
             }
         }
 
-        await Stock.update(
-            {
-                news: news,
-                interest_id: interestId,
-                category_id: category.id,
-                issue: issue,
-            },
-            { where: { id: id } }
-        );
+        if (!cmpToday(date)) {
+            await Stock.update(
+                {
+                    news: news,
+                    interest_id: interestId,
+                    category_id: category.id,
+                    issue: issue,
+                    current_price: currentPrice,
+                    diff_price: diffPrice,
+                },
+                { where: { id: id } }
+            );
+        } else {
+            await Stock.update(
+                {
+                    news: news,
+                    interest_id: interestId,
+                    category_id: category.id,
+                    issue: issue,
+                },
+                { where: { id: id } }
+            );
+        }
 
         stock = await Stock.findOne({
             where: {

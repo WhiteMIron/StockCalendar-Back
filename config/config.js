@@ -7,7 +7,13 @@ module.exports = {
         database: 'stock',
         host: '127.0.0.1',
         dialect: 'mysql',
+
         timezone: '+09:00',
+
+        // host: 'svc.sel4.cloudtype.app',
+        // dialect: 'mariadb',
+        // port: '32175',
+
         // dialectOptions: {
         //     ssl: {
         //         require: true,
