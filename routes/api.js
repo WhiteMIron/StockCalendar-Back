@@ -180,6 +180,17 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
 
     try {
         const stock = await Stock.findAll({
+            attributes: {
+                include: [
+                    [
+                        sequelize.literal(
+                            'CASE WHEN interest_id IS NOT NULL THEN TRUE ELSE FALSE END'
+                        ),
+                        'isInterest',
+                    ],
+                ],
+                exclude: [],
+            },
             where: {
                 user_id: user.id,
                 register_date: date,
@@ -187,8 +198,9 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
             include: [
                 {
                     model: Category,
+                    attributes: ['id', 'name'],
                 },
-                { model: Interest },
+                { model: Interest, attributes: ['id'] },
             ],
         });
 
@@ -340,7 +352,8 @@ router.delete('/stock/:id', isLoggedIn, async (req, res, next) => {
 });
 
 router.put('/stock', isLoggedIn, async (req, res, next) => {
-    const { id, categoryName, isInterest, news, issue, currentPrice, diffPrice } = req.body;
+    const { id, categoryName, isInterest, news, issue, currentPrice, previousClose, date } =
+        req.body;
     let category;
     let exInterest;
     let interestId;
@@ -386,12 +399,14 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
         if (!cmpToday(date)) {
             await Stock.update(
                 {
+                    current_price: currentPrice,
+                    diff_price: calDiffPrice(currentPrice, previousClose),
+                    diff_percent: calDiffPercent(currentPrice, previousClose) + '%',
+                    previous_close: previousClose,
                     news: news,
+                    issue: issue,
                     interest_id: interestId,
                     category_id: category.id,
-                    issue: issue,
-                    current_price: currentPrice,
-                    diff_price: diffPrice,
                 },
                 { where: { id: id } }
             );
@@ -399,9 +414,9 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
             await Stock.update(
                 {
                     news: news,
+                    issue: issue,
                     interest_id: interestId,
                     category_id: category.id,
-                    issue: issue,
                 },
                 { where: { id: id } }
             );
