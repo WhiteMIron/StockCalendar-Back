@@ -94,9 +94,11 @@ const isEmpty = function (value) {
     }
 };
 
-//수정용
-router.get('/interest', isLoggedIn, async (req, res, next) => {
+//수정용 ?
+//관심종목 메뉴 조회용
+router.get('/interest', async (req, res, next) => {
     const { user } = req;
+    const { code } = req.query;
     let isInterest;
 
     try {
@@ -120,6 +122,40 @@ router.get('/interest', isLoggedIn, async (req, res, next) => {
         next(error); // status 500}
     }
 });
+
+//해당 종목코드가 관심여부에 등록되어있는지 확인용도
+router.get('/check-interest', isLoggedIn, async (req, res, next) => {
+    const { user } = req;
+    const { code } = req.query;
+
+    try {
+        const stock = await Stock.findOne({
+            attributes: {
+                include: [
+                    [
+                        sequelize.literal(
+                            'CASE WHEN interest_id IS NOT NULL THEN TRUE ELSE FALSE END'
+                        ),
+                        'isInterest',
+                    ],
+                ],
+            },
+            where: {
+                user_id: user.id,
+                stock_code: code,
+                interest_id: {
+                    [Op.ne]: null, //값이 null인 걸 제외하고 찾아준다
+                },
+            },
+        });
+
+        res.status(200).send(stock);
+    } catch (error) {
+        console.error(error);
+        next(error); // status 500}
+    }
+});
+
 router.get('/summary', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     const { date } = req.query;
@@ -180,17 +216,17 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
 
     try {
         const stock = await Stock.findAll({
-            attributes: {
-                include: [
-                    [
-                        sequelize.literal(
-                            'CASE WHEN interest_id IS NOT NULL THEN TRUE ELSE FALSE END'
-                        ),
-                        'isInterest',
-                    ],
-                ],
-                exclude: [],
-            },
+            // attributes: {
+            //     include: [
+            //         [
+            //             sequelize.literal(
+            //                 'CASE WHEN interest_id IS NOT NULL THEN TRUE ELSE FALSE END'
+            //             ),
+            //             'isInterest',
+            //         ],
+            //     ],
+            //     exclude: [],
+            // },
             where: {
                 user_id: user.id,
                 register_date: date,
@@ -200,7 +236,7 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
                     model: Category,
                     attributes: ['id', 'name'],
                 },
-                { model: Interest, attributes: ['id'] },
+                // { model: Interest, attributes: ['id'] },
             ],
         });
 
@@ -352,8 +388,17 @@ router.delete('/stock/:id', isLoggedIn, async (req, res, next) => {
 });
 
 router.put('/stock', isLoggedIn, async (req, res, next) => {
-    const { id, categoryName, isInterest, news, issue, currentPrice, previousClose, date } =
-        req.body;
+    const {
+        id,
+        stockCode,
+        categoryName,
+        isInterest,
+        news,
+        issue,
+        currentPrice,
+        previousClose,
+        date,
+    } = req.body;
     let category;
     let exInterest;
     let interestId;
@@ -374,13 +419,13 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
 
         exInterest = await Stock.findOne({
             where: {
-                id: id,
+                stock_code: stockCode,
                 interest_id: {
                     [Op.ne]: null, //값이 null인 걸 제외하고 찾아준다
                 },
             },
         });
-
+        console.log('exInterest:', exInterest);
         if (isInterest) {
             if (isEmpty(exInterest)) {
                 interest = await Interest.create({});
