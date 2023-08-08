@@ -156,6 +156,32 @@ router.get('/check-interest', isLoggedIn, async (req, res, next) => {
     }
 });
 
+//카테고리 조회
+// router.get('/category', async (req, res, next) => {
+//     const { user } = req;
+
+//     try {
+//         const category = await Category.findAll({
+
+//             where: {
+//                 user_id: 1,
+//             },
+//             include: [
+//                 {
+//                     model: Stock,
+//                     // attributes: ['id', 'name'],
+//                     where: { categ: { [Op.is]: null } },
+//                 },
+//             ],
+//         });
+
+//         res.status(200).send(stock);
+//     } catch (error) {
+//         console.error(error);
+//         next(error); // status 500}
+//     }
+// });
+
 router.get('/summary', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     const { date } = req.query;
@@ -216,17 +242,6 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
 
     try {
         const stock = await Stock.findAll({
-            // attributes: {
-            //     include: [
-            //         [
-            //             sequelize.literal(
-            //                 'CASE WHEN interest_id IS NOT NULL THEN TRUE ELSE FALSE END'
-            //             ),
-            //             'isInterest',
-            //         ],
-            //     ],
-            //     exclude: [],
-            // },
             where: {
                 user_id: user.id,
                 register_date: date,
@@ -236,7 +251,6 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
                     model: Category,
                     attributes: ['id', 'name'],
                 },
-                // { model: Interest, attributes: ['id'] },
             ],
         });
 
@@ -247,7 +261,7 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
     }
 });
 
-router.get('/stock-by-year-month', async (req, res, next) => {
+router.get('/stock-by-year-month', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     const { date } = req.query;
 
@@ -295,11 +309,13 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
             const exCategory = await Category.findOne({
                 where: {
                     name: categoryName,
+                    user_id :user.id
                 },
             });
             if (!exCategory) {
                 category = await Category.create({
                     name: categoryName,
+                    user_id :user.id
                 });
             } else {
                 category = exCategory;
@@ -320,7 +336,7 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
             ],
         });
         if (exStock) {
-            return res.status(403).send('이미 등록되어있는 주식입니다.');
+            return res.status(403).send('이미 등록되어있는 종목입니다.');
         }
         exInterest = await Stock.findOne({
             where: {
@@ -388,6 +404,7 @@ router.delete('/stock/:id', isLoggedIn, async (req, res, next) => {
 });
 
 router.put('/stock', isLoggedIn, async (req, res, next) => {
+    const { user } = req;
     const {
         id,
         stockCode,
@@ -407,11 +424,13 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
         const exCategory = await Category.findOne({
             where: {
                 name: categoryName,
+                user_id :user.id
             },
         });
         if (!exCategory) {
             category = await Category.create({
                 name: categoryName,
+                user_id :user.id
             });
         } else {
             category = exCategory;
@@ -425,7 +444,7 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
                 },
             },
         });
-        console.log('exInterest:', exInterest);
+        
         if (isInterest) {
             if (isEmpty(exInterest)) {
                 interest = await Interest.create({});
@@ -453,7 +472,8 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
                     interest_id: interestId,
                     category_id: category.id,
                 },
-                { where: { id: id } }
+                { where: { id: id
+                ,user_id:user.id } }
             );
         } else {
             await Stock.update(
@@ -463,7 +483,7 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
                     interest_id: interestId,
                     category_id: category.id,
                 },
-                { where: { id: id } }
+                { where: { id: id ,user_id:user.id} }
             );
         }
 
