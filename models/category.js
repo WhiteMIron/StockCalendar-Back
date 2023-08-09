@@ -22,7 +22,8 @@ module.exports = class Category extends Model {
         );
     }
     static associate(db) {
-        db.Category.hasMany(db.Stock, { as: 'category_id', foreignKey: 'category_id' });
+        // db.Category.hasMany(db.Stock, { as: 'category_id', foreignKey: 'category_id' });
+        db.Category.hasMany(db.Stock, { foreignKey: 'category_id' });
         db.Category.belongsTo(db.User, { foreignKey: 'user_id' });
     }
 };

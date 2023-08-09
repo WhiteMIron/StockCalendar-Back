@@ -19,8 +19,8 @@ const router = express.Router();
 const { getWhereClause } = require('../util/search');
 const { parsing, calDiffPercent, calDiffPrice } = require('../util/stock');
 const { cmpToday } = require('../util/common');
-//record 페이지 로딩시 데이터 있는 거 반환하는 용도
 
+//record 페이지 로딩시 데이터 있는 거 반환하는 용도
 router.get('/record-all-search', async (req, res, next) => {
     const { user } = req;
     const { startDate } = req.query;
@@ -123,13 +123,108 @@ router.get('/interest', async (req, res, next) => {
     }
 });
 
-//해당 종목코드가 관심여부에 등록되어있는지 확인용도
 router.get('/check-interest', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     const { code } = req.query;
 
     try {
         const stock = await Stock.findOne({
+            attributes: {
+                include: [
+                    [
+                        sequelize.literal(`
+                      (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END FROM Interest WHERE Interest.stock_code = Stock.stock_code LIMIT 1)
+                    `),
+                        'isInterest',
+                    ],
+                ],
+            },
+            where: {
+                user_id: user.id,
+                stock_code: code,
+            },
+        });
+
+        res.status(200).send(stock);
+    } catch (error) {
+        console.error(error);
+        next(error); // status 500}
+    }
+});
+
+// 전 종목들의 카테고리 조회
+// router.get('/category', isLoggedIn, async (req, res, next) => {
+//     const { user } = req;
+//     console.log('요청들어옴');
+//     try {
+//         const category = await Category.findAll({
+//             attributes: [
+//                 'id',
+//                 'name',
+//                 [sequelize.fn('COUNT', sequelize.col('Stocks.id')), 'stockCount'],
+//             ],
+
+//             include: [
+//                 {
+//                     model: Stock,
+//                     attributes: [],
+//                     where: {
+//                         user_id: user.id,
+//                     },
+//                 },
+//             ],
+//             group: ['Category.id'],
+//             raw: true,
+//         });
+
+//         res.status(200).send(category);
+//     } catch (error) {
+//         console.error(error);
+//         next(error); // status 500}
+//     }
+// });
+
+//관심종목되어있는 종목들의 카테고리 조회
+router.get('/interest-category', isLoggedIn, async (req, res, next) => {
+    const { user } = req;
+    try {
+        const category = await Category.findAll({
+            attributes: [
+                'id',
+                'name',
+                [sequelize.fn('COUNT', sequelize.col('Stocks.id')), 'stockCount'],
+            ],
+
+            include: [
+                {
+                    model: Stock,
+                    attributes: [],
+                    where: {
+                        user_id: user.id,
+                        interest_id: {
+                            [Op.ne]: null,
+                        },
+                    },
+                },
+            ],
+            group: ['Category.id'],
+            raw: true,
+        });
+
+        res.status(200).send(category);
+    } catch (error) {
+        console.error(error);
+        next(error); // status 500}
+    }
+});
+
+// 특정 종목의 모든 데이터
+
+router.get('/specific-stock-all', isLoggedIn, async (req, res, next) => {
+    const { user } = req;
+    const { code } = req.query;
+    try {
+        const stock = await Stock.findAll({
             attributes: {
                 include: [
                     [
@@ -143,10 +238,13 @@ router.get('/check-interest', isLoggedIn, async (req, res, next) => {
             where: {
                 user_id: user.id,
                 stock_code: code,
-                interest_id: {
-                    [Op.ne]: null, //값이 null인 걸 제외하고 찾아준다
-                },
             },
+            include: [
+                {
+                    model: Category,
+                    attributes: ['id', 'name'],
+                },
+            ],
         });
 
         res.status(200).send(stock);
@@ -156,31 +254,38 @@ router.get('/check-interest', isLoggedIn, async (req, res, next) => {
     }
 });
 
-//카테고리 조회
-// router.get('/category', async (req, res, next) => {
-//     const { user } = req;
+//카테고리  - 관심 종목 조회 interest-by-category Istock으로 받으면 되고
 
-//     try {
-//         const category = await Category.findAll({
+router.get('/interest-by-category', isLoggedIn, async (req, res, next) => {
+    const { user } = req;
+    const { categoryName } = req.query;
+    try {
+        const stock = await Stock.findAll({
+            where: {
+                user_id: user.id,
+                interest_id: {
+                    [Op.ne]: null,
+                },
+            },
+            include: [
+                {
+                    model: Category,
+                    attributes: [],
+                    where: {
+                        name: categoryName,
+                    },
+                },
+            ],
+        });
 
-//             where: {
-//                 user_id: 1,
-//             },
-//             include: [
-//                 {
-//                     model: Stock,
-//                     // attributes: ['id', 'name'],
-//                     where: { categ: { [Op.is]: null } },
-//                 },
-//             ],
-//         });
+        res.status(200).send(stock);
+    } catch (error) {
+        console.error(error);
+        next(error); // status 500}
+    }
+});
 
-//         res.status(200).send(stock);
-//     } catch (error) {
-//         console.error(error);
-//         next(error); // status 500}
-//     }
-// });
+//카테고리 - 종목 조회  stock-by-category Istock으로 받으면 되고
 
 router.get('/summary', isLoggedIn, async (req, res, next) => {
     const { user } = req;
@@ -242,6 +347,16 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
 
     try {
         const stock = await Stock.findAll({
+            attributes: {
+                include: [
+                    [
+                        sequelize.literal(`
+                      (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END FROM Interest WHERE Interest.stock_code = Stock.stock_code LIMIT 1)
+                    `),
+                        'isInterest',
+                    ],
+                ],
+            },
             where: {
                 user_id: user.id,
                 register_date: date,
@@ -278,7 +393,7 @@ router.get('/stock-by-year-month', isLoggedIn, async (req, res, next) => {
         res.status(200).send(stock);
     } catch (error) {
         console.error(error);
-        next(error); // status 500}
+        next(error); // status 500
     }
 });
 
@@ -309,13 +424,13 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
             const exCategory = await Category.findOne({
                 where: {
                     name: categoryName,
-                    user_id :user.id
+                    user_id: user.id,
                 },
             });
             if (!exCategory) {
                 category = await Category.create({
                     name: categoryName,
-                    user_id :user.id
+                    user_id: user.id,
                 });
             } else {
                 category = exCategory;
@@ -338,27 +453,24 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
         if (exStock) {
             return res.status(403).send('이미 등록되어있는 종목입니다.');
         }
-        exInterest = await Stock.findOne({
+        exInterest = await Interest.findOne({
             where: {
-                name: info.name,
+                stock_code: code,
                 user_id: user.id,
-                interest_id: {
-                    [Op.ne]: null, //값이 null인 걸 제외하고 찾아준다
-                },
             },
         });
 
         if (isInterest) {
             if (isEmpty(exInterest)) {
-                interest = await Interest.create({});
-                interestId = interest.id;
-            } else {
-                interestId = exInterest.interest_id;
+                interest = await Interest.create({
+                    stock_code: code,
+                    user_id: user.id,
+                });
             }
         } else {
             if (!isEmpty(exInterest)) {
                 await Interest.destroy({
-                    where: { id: exInterest.interest_id },
+                    where: { stock_code: code, user_id: user.id },
                 });
             }
         }
@@ -375,7 +487,6 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
             category_id: category.id,
             register_date: date,
             news: news,
-            interest_id: interestId,
             issue: issue,
         });
         const data = stock.get({ plain: true });
@@ -418,44 +529,41 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
     } = req.body;
     let category;
     let exInterest;
-    let interestId;
     let stock;
     try {
         const exCategory = await Category.findOne({
             where: {
                 name: categoryName,
-                user_id :user.id
+                user_id: user.id,
             },
         });
         if (!exCategory) {
             category = await Category.create({
                 name: categoryName,
-                user_id :user.id
+                user_id: user.id,
             });
         } else {
             category = exCategory;
         }
 
-        exInterest = await Stock.findOne({
+        exInterest = await Interest.findOne({
             where: {
                 stock_code: stockCode,
-                interest_id: {
-                    [Op.ne]: null, //값이 null인 걸 제외하고 찾아준다
-                },
+                user_id: user.id,
             },
         });
-        
+
         if (isInterest) {
             if (isEmpty(exInterest)) {
-                interest = await Interest.create({});
-                interestId = interest.id;
-            } else {
-                interestId = exInterest.interest_id;
+                interest = await Interest.create({
+                    stock_code: stockCode,
+                    user_id: user.id,
+                });
             }
         } else {
             if (!isEmpty(exInterest)) {
                 await Interest.destroy({
-                    where: { id: exInterest.interest_id },
+                    where: { stock_code: stockCode, user_id: user.id },
                 });
             }
         }
@@ -469,21 +577,18 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
                     previous_close: previousClose,
                     news: news,
                     issue: issue,
-                    interest_id: interestId,
                     category_id: category.id,
                 },
-                { where: { id: id
-                ,user_id:user.id } }
+                { where: { id: id, user_id: user.id } }
             );
         } else {
             await Stock.update(
                 {
                     news: news,
                     issue: issue,
-                    interest_id: interestId,
                     category_id: category.id,
                 },
-                { where: { id: id ,user_id:user.id} }
+                { where: { id: id, user_id: user.id } }
             );
         }
 
