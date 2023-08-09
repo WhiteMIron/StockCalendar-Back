@@ -184,31 +184,21 @@ router.get('/check-interest', isLoggedIn, async (req, res, next) => {
 //     }
 // });
 
-//관심종목되어있는 종목들의 카테고리 조회
 router.get('/interest-category', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     try {
-        const category = await Category.findAll({
-            attributes: [
-                'id',
-                'name',
-                [sequelize.fn('COUNT', sequelize.col('Stocks.id')), 'stockCount'],
-            ],
+        const query = `
+        SELECT C.name, C.id, COUNT(C.id) AS stockCount
+        FROM CATEGORYS C
+        LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
+        LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
+        WHERE S.user_id = :userId
+        GROUP BY C.id
+    `;
 
-            include: [
-                {
-                    model: Stock,
-                    attributes: [],
-                    where: {
-                        user_id: user.id,
-                        interest_id: {
-                            [Op.ne]: null,
-                        },
-                    },
-                },
-            ],
-            group: ['Category.id'],
-            raw: true,
+        const category = await sequelize.query(query, {
+            replacements: { userId: user.id },
+            type: sequelize.QueryTypes.SELECT,
         });
 
         res.status(200).send(category);
