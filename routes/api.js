@@ -191,8 +191,9 @@ router.get('/interest-category', isLoggedIn, async (req, res, next) => {
                SELECT C.id, C.name, COUNT(DISTINCT S.name) AS stockCount
                FROM CATEGORYS C
                LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
-               RIGHT OUTER JOIN interest I ON S.stock_code = I.stock_code
+               LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
                WHERE S.user_id = :userId
+               AND I.stock_code IS NOT null             
                GROUP BY C.id;
               `;
 
@@ -210,56 +211,34 @@ router.get('/interest-category', isLoggedIn, async (req, res, next) => {
 
 // 특정 종목 페이징네이션 데이터
 
-// router.get('/specific-stock-all', isLoggedIn, async (req, res, next) => {
-//     const { user } = req;
-//     const { code } = req.query;
-//     try {
-//         const stock = await Stock.findAll({
-//             attributes: {
-//                 include: [
-//                     [
-//                         sequelize.literal(
-//                             'CASE WHEN interest_id IS NOT NULL THEN TRUE ELSE FALSE END'
-//                         ),
-//                         'isInterest',
-//                     ],
-//                 ],
-//             },
-//             where: {
-//                 user_id: user.id,
-//                 stock_code: code,
-//             },
-//             include: [
-//                 {
-//                     model: Category,
-//                     attributes: ['id', 'name'],
-//                 },
-//             ],
-//         });
-
-//         res.status(200).send(stock);
-//     } catch (error) {
-//         console.error(error);
-//         next(error); // status 500}
-//     }
-// });
+// attributes: {
+//     include: [
+//         [
+//             sequelize.literal(`
+//           (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END FROM Interest WHERE Interest.stock_code = Stock.stock_code LIMIT 1)
+//         `),
+//             'isInterest',
+//         ],
+//     ],
+// },
 
 router.get('/specific-stock-all', isLoggedIn, async (req, res, next) => {
     const { user } = req;
-    const { code, offset, countControl } = req.query;
+    const { code, offset, numPerPage, categoryName } = req.query;
+
     try {
-        // const stock = await Stock.findAll({
         const { count, rows: stock } = await Stock.findAndCountAll({
-            attributes: {
-                include: [
-                    [
-                        sequelize.literal(`
-                      (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END FROM Interest WHERE Interest.stock_code = Stock.stock_code LIMIT 1)
-                    `),
-                        'isInterest',
-                    ],
-                ],
-            },
+            // attributes: {
+            //     include: [
+            //         [
+            //             sequelize.literal(`
+            //               (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END FROM Interest WHERE Interest.stock_code = Stock.stock_code LIMIT 1)
+            //             `),
+            //             'isInterest',
+            //         ],
+            //     ],
+            // },
+
             where: {
                 user_id: user.id,
                 stock_code: code,
@@ -268,16 +247,41 @@ router.get('/specific-stock-all', isLoggedIn, async (req, res, next) => {
                 {
                     model: Category,
                     attributes: ['id', 'name'],
+                    where: {
+                        name: categoryName,
+                    },
                 },
             ],
-            // order: [['some_column', 'ASC']],
-            limit: parseInt(countControl),
+            order: [['register_date', 'desc']],
+            limit: parseInt(numPerPage),
             offset: parseInt(offset),
         });
+
+        // const query = `
+        // SELECT S.*, C.*
+        // FROM CATEGORYS C
+        // LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
+        // LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
+        // WHERE S.user_id = :userId
+        // AND S.stock_code = :code
+        // AND I.stock_code IS NOT null
+        // ORDER BY S.register_date desc;
+        // `;
+
+        // const stock = await sequelize.query(query, {
+        //     replacements: { userId: user.id, code: code },
+        //     type: sequelize.QueryTypes.SELECT,
+        // });
+
         const result = {
             totalCount: count,
-            stock,
+            stock: stock,
         };
+
+        // const result = {
+        //     totalCount: stock.length,
+        //     stock: stock,
+        // };
         res.status(200).send(result);
     } catch (error) {
         console.error(error);
@@ -292,12 +296,13 @@ router.get('/interest-by-category', isLoggedIn, async (req, res, next) => {
     const { categoryName } = req.query;
     try {
         const query = `
-        SELECT S.stock_code, S.name
+        SELECT S.stock_code, S.name, C.name as category_name
         FROM CATEGORYS C
         LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
         LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
         WHERE C.user_id=:userId and C.name = :categoryName
-        GROUP BY S.stock_code, S.name;
+        AND I.stock_code IS NOT null   
+        GROUP BY S.stock_code, S.name, C.name;
     `;
 
         const stock = await sequelize.query(query, {
@@ -394,6 +399,7 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
                     attributes: ['id', 'name'],
                 },
             ],
+            order: [['register_date', 'desc']],
         });
 
         res.status(200).send(stock);

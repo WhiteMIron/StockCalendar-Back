@@ -45,7 +45,7 @@ module.exports = class Stock extends Model {
                     allowNull: true,
                 },
                 issue: {
-                    type: DataTypes.STRING(500),
+                    type: DataTypes.TEXT,
                     allowNull: true,
                 },
             },

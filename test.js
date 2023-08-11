@@ -16,3 +16,5 @@ console.log(result);
 
 num = 1000000;
 console.log(num.toLocaleString());
+
+console.log(2 % 5);
