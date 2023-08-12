@@ -18,15 +18,12 @@ const Summary = require('../models/summary');
 const router = express.Router();
 const { getWhereClause } = require('../util/search');
 const { parsing, calDiffPercent, calDiffPrice } = require('../util/stock');
-const { cmpToday } = require('../util/common');
+const { cmpToday, isEmpty } = require('../util/common');
 
-//record 페이지 로딩시 데이터 있는 거 반환하는 용도
 router.get('/record-all-search', async (req, res, next) => {
     const { user } = req;
     const { startDate } = req.query;
-    console.log(startDate);
     try {
-        const { user } = req;
         let stocks = await Stock.findAll({
             attributes: ['register_date'],
             where: {
@@ -81,47 +78,6 @@ router.get('/stock-search', async (req, res, next) => {
         next(error);
     }
 });
-const isEmpty = function (value) {
-    if (
-        value == '' ||
-        value == null ||
-        value == undefined ||
-        (value != null && typeof value == 'object' && !Object.keys(value).length)
-    ) {
-        return true;
-    } else {
-        return false;
-    }
-};
-
-//수정용 ?
-//관심종목 메뉴 조회용
-// router.get('/interest', async (req, res, next) => {
-//     const { user } = req;
-//     const { code } = req.query;
-//     let isInterest;
-
-//     try {
-//         const stock = await Stock.findOne({
-//             where: {
-//                 user_id: user.id,
-//                 stock_code: code,
-//                 interest_id: {
-//                     [Op.ne]: null, //값이 null인 걸 제외하고 찾아준다
-//                 },
-//             },
-//         });
-//         if (isEmpty(stock)) {
-//             isInterest = false;
-//         } else {
-//             isInterest = true;
-//         }
-//         res.status(200).send({ isInterest: isInterest });
-//     } catch (error) {
-//         console.error(error);
-//         next(error); // status 500}
-//     }
-// });
 
 router.get('/check-interest', isLoggedIn, async (req, res, next) => {
     const { user } = req;
@@ -211,77 +167,63 @@ router.get('/interest-category', isLoggedIn, async (req, res, next) => {
 
 // 특정 종목 페이징네이션 데이터
 
-// attributes: {
-//     include: [
-//         [
-//             sequelize.literal(`
-//           (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END FROM Interest WHERE Interest.stock_code = Stock.stock_code LIMIT 1)
-//         `),
-//             'isInterest',
-//         ],
-//     ],
-// },
-
-router.get('/specific-stock-all', isLoggedIn, async (req, res, next) => {
+router.get('/specific-stock-all', async (req, res, next) => {
     const { user } = req;
-    const { code, offset, numPerPage, categoryName } = req.query;
-
+    const { code, categoryName } = req.query;
+    const numPerPage = parseInt(req.query.numPerPage);
+    const offset = parseInt(req.query.offset);
     try {
-        const { count, rows: stock } = await Stock.findAndCountAll({
-            // attributes: {
-            //     include: [
-            //         [
-            //             sequelize.literal(`
-            //               (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END FROM Interest WHERE Interest.stock_code = Stock.stock_code LIMIT 1)
-            //             `),
-            //             'isInterest',
-            //         ],
-            //     ],
-            // },
+        const countQuery = `
+            SELECT COUNT(*) AS totalCount
+            FROM CATEGORYS C
+            LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
+            LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
+            WHERE S.user_id = :userId
+            AND S.stock_code = :code
+            AND C.name = :categoryName
+            AND I.stock_code IS NOT null;
+        `;
 
-            where: {
-                user_id: user.id,
-                stock_code: code,
+        const query = `
+            SELECT S.*, C.name AS category_name
+            FROM CATEGORYS C
+            LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
+            LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
+            WHERE S.user_id = :userId
+            AND S.stock_code = :code
+            AND C.name = :categoryName
+            AND I.stock_code IS NOT null
+            ORDER BY S.register_date desc
+            LIMIT  :numPerPage
+            OFFSET :offset
+            `;
+
+        const stock = await sequelize.query(query, {
+            replacements: {
+                userId: user.id,
+                code: code,
+                categoryName: categoryName,
+                numPerPage: numPerPage,
+                offset: offset,
             },
-            include: [
-                {
-                    model: Category,
-                    attributes: ['id', 'name'],
-                    where: {
-                        name: categoryName,
-                    },
-                },
-            ],
-            order: [['register_date', 'desc']],
-            limit: parseInt(numPerPage),
-            offset: parseInt(offset),
+            type: sequelize.QueryTypes.SELECT,
         });
 
-        // const query = `
-        // SELECT S.*, C.*
-        // FROM CATEGORYS C
-        // LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
-        // LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
-        // WHERE S.user_id = :userId
-        // AND S.stock_code = :code
-        // AND I.stock_code IS NOT null
-        // ORDER BY S.register_date desc;
-        // `;
+        const totalCountResult = await sequelize.query(countQuery, {
+            replacements: {
+                userId: 1,
+                code: code,
+                categoryName: categoryName,
+            },
+            type: sequelize.QueryTypes.SELECT,
+        });
 
-        // const stock = await sequelize.query(query, {
-        //     replacements: { userId: user.id, code: code },
-        //     type: sequelize.QueryTypes.SELECT,
-        // });
+        const totalCount = totalCountResult[0].totalCount;
 
         const result = {
-            totalCount: count,
+            totalCount: totalCount,
             stock: stock,
         };
-
-        // const result = {
-        //     totalCount: stock.length,
-        //     stock: stock,
-        // };
         res.status(200).send(result);
     } catch (error) {
         console.error(error);
@@ -378,28 +320,26 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
     const { date } = req.query;
 
     try {
-        const stock = await Stock.findAll({
-            attributes: {
-                include: [
-                    [
-                        sequelize.literal(`
-                      (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END FROM Interest WHERE Interest.stock_code = Stock.stock_code LIMIT 1)
-                    `),
-                        'isInterest',
-                    ],
-                ],
-            },
-            where: {
-                user_id: user.id,
-                register_date: date,
-            },
-            include: [
-                {
-                    model: Category,
-                    attributes: ['id', 'name'],
-                },
-            ],
-            order: [['register_date', 'desc']],
+        const query = `
+        SELECT S.*, C.name AS category_name,
+          (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END 
+          FROM Interest WHERE Interest.stock_code = S.stock_code LIMIT 1) AS isInterest
+        FROM STOCKS S 
+        LEFT OUTER JOIN CATEGORYS C ON  S.category_id  = C.id 
+        LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
+        WHERE S.user_id = :userId
+        AND S.register_date = :date
+        ORDER BY S.createdAt desc
+    `;
+
+        const replacements = {
+            userId: user.id,
+            date: date,
+        };
+
+        const stock = await sequelize.query(query, {
+            replacements: replacements,
+            type: sequelize.QueryTypes.SELECT,
         });
 
         res.status(200).send(stock);
@@ -523,13 +463,14 @@ router.post('/stock', isLoggedIn, async (req, res, next) => {
             issue: issue,
         });
         const data = stock.get({ plain: true });
-        data.Category = category.get({ plain: true });
+        data.category_name = category.get({ plain: true }).name;
+        data.category_id = category.get({ plain: true }).id;
+
         if (isInterest) {
             data.isInterest = true;
         } else {
             data.isInterest = false;
         }
-        console.log(data);
         res.status(201).send(data);
     } catch (error) {
         next(error);
@@ -625,20 +566,29 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
             );
         }
 
-        stock = await Stock.findOne({
-            where: {
-                id: id,
-            },
-        });
+        const query = `
+            SELECT S.*, C.name AS category_name,
+              (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END
+              FROM Interest WHERE Interest.stock_code = S.stock_code LIMIT 1) AS isInterest
+            FROM STOCKS S
+            LEFT OUTER JOIN CATEGORYS C ON  S.category_id  = C.id
+            LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
+            WHERE S.user_id = :userId
+            AND S.id = :id
+        `;
 
-        const data = stock.get({ plain: true });
-        data.Category = category.get({ plain: true });
-        if (isInterest) {
-            data.isInterest = true;
-        } else {
-            data.isInterest = false;
-        }
-        res.status(200).send(data);
+        const replacements = {
+            userId: user.id,
+            id: id,
+        };
+
+        const stockResult = await sequelize.query(query, {
+            replacements: replacements,
+            type: sequelize.QueryTypes.SELECT,
+        });
+        stock = stockResult[0];
+
+        res.status(200).send(stock);
     } catch (error) {
         next(error);
     }
