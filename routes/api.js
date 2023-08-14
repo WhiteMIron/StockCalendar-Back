@@ -139,6 +139,10 @@ router.get('/category', isLoggedIn, async (req, res, next) => {
     }
 });
 
+router.get('/test', async (req, res, next) => {
+    res.status(200).send('hi');
+});
+
 router.get('/all-category', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     try {
