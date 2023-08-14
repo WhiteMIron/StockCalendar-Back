@@ -20,6 +20,13 @@ const { getWhereClause } = require('../util/search');
 const { parsing, calDiffPercent, calDiffPrice } = require('../util/stock');
 const { cmpToday, isEmpty } = require('../util/common');
 
+router.get('/test', async (req, res, next) => {
+    try {
+        res.status(200).send('hi');
+    } catch (error) {
+        next(error);
+    }
+});
 router.get('/record-all-search', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     const { startDate } = req.query;
@@ -89,7 +96,7 @@ router.get('/check-interest', isLoggedIn, async (req, res, next) => {
                 include: [
                     [
                         sequelize.literal(`
-                      (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END FROM Interest WHERE Interest.stock_code = Stock.stock_code LIMIT 1)
+                      (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END FROM interest WHERE interest.stock_code = stock.stock_code LIMIT 1)
                     `),
                         'isInterest',
                     ],
@@ -209,8 +216,8 @@ router.get('/stock-in-category', isLoggedIn, async (req, res, next) => {
     try {
         const query = `
         SELECT S.stock_code, S.name, C.name as category_name
-        FROM CATEGORYS C
-        RIGHT OUTER JOIN STOCKS S ON C.id = S.category_id
+        FROM categorys C
+        RIGHT OUTER JOIN stocks S ON C.id = S.category_id
         WHERE C.user_id=:userId and C.name = :categoryName
         GROUP BY S.stock_code, S.name, C.name;
     `;
@@ -235,8 +242,8 @@ router.get('/specific-stock-all', isLoggedIn, async (req, res, next) => {
     try {
         const countQuery = `
             SELECT COUNT(*) AS totalCount
-            FROM CATEGORYS C
-            LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
+            FROM categorys C
+            LEFT OUTER JOIN stocks S ON C.id = S.category_id
             WHERE S.user_id = :userId
             AND S.stock_code = :code
             AND C.name = :categoryName
@@ -244,8 +251,8 @@ router.get('/specific-stock-all', isLoggedIn, async (req, res, next) => {
 
         const query = `
             SELECT S.*, C.name AS category_name
-            FROM CATEGORYS C
-            LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
+            FROM categorys C
+            LEFT OUTER JOIN stocks S ON C.id = S.category_id
             WHERE S.user_id = :userId
             AND S.stock_code = :code
             AND C.name = :categoryName
@@ -297,8 +304,8 @@ router.get('/specific-interest-stock-all', isLoggedIn, async (req, res, next) =>
     try {
         const countQuery = `
             SELECT COUNT(*) AS totalCount
-            FROM CATEGORYS C
-            LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
+            FROM categorys C
+            LEFT OUTER JOIN stocks S ON C.id = S.category_id
             LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
             WHERE S.user_id = :userId
             AND S.stock_code = :code
@@ -308,8 +315,8 @@ router.get('/specific-interest-stock-all', isLoggedIn, async (req, res, next) =>
 
         const query = `
             SELECT S.*, C.name AS category_name
-            FROM CATEGORYS C
-            LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
+            FROM categorys C
+            LEFT OUTER JOIN stocks S ON C.id = S.category_id
             LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
             WHERE S.user_id = :userId
             AND S.stock_code = :code
@@ -358,8 +365,8 @@ router.get('/interest-category', isLoggedIn, async (req, res, next) => {
     try {
         const query = `
                SELECT C.id, C.name, COUNT(DISTINCT S.name) AS stockCount
-               FROM CATEGORYS C
-               LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
+               FROM categorys C
+               LEFT OUTER JOIN stocks S ON C.id = S.category_id
                LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
                WHERE S.user_id = :userId
                AND I.stock_code IS NOT null             
@@ -384,8 +391,8 @@ router.get('/interest-stock-in-category', isLoggedIn, async (req, res, next) => 
     try {
         const query = `
         SELECT S.stock_code, S.name, C.name as category_name
-        FROM CATEGORYS C
-        LEFT OUTER JOIN STOCKS S ON C.id = S.category_id
+        FROM categorys C
+        LEFT OUTER JOIN stocks S ON C.id = S.category_id
         LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
         WHERE C.user_id=:userId and C.name = :categoryName
         AND I.stock_code IS NOT null   
@@ -466,9 +473,9 @@ router.get('/stock', isLoggedIn, async (req, res, next) => {
         const query = `
         SELECT S.*, C.name AS category_name,
           (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END 
-          FROM Interest WHERE Interest.stock_code = S.stock_code LIMIT 1) AS isInterest
+          FROM interest WHERE interest.stock_code = S.stock_code LIMIT 1) AS isInterest
         FROM STOCKS S 
-        LEFT OUTER JOIN CATEGORYS C ON  S.category_id  = C.id 
+        LEFT OUTER JOIN categorys C ON  S.category_id  = C.id 
         LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
         WHERE S.user_id = :userId
         AND S.register_date = :date
@@ -691,9 +698,9 @@ router.put('/stock', isLoggedIn, async (req, res, next) => {
         const query = `
             SELECT S.*, C.name AS category_name,
               (SELECT CASE WHEN id IS NOT NULL THEN TRUE ELSE FALSE END
-              FROM Interest WHERE Interest.stock_code = S.stock_code LIMIT 1) AS isInterest
-            FROM STOCKS S
-            LEFT OUTER JOIN CATEGORYS C ON  S.category_id  = C.id
+              FROM interest WHERE interest.stock_code = S.stock_code LIMIT 1) AS isInterest
+            FROM stocks S
+            LEFT OUTER JOIN categorys C ON  S.category_id  = C.id
             LEFT OUTER JOIN interest I ON S.stock_code = I.stock_code
             WHERE S.user_id = :userId
             AND S.id = :id
