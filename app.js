@@ -57,7 +57,7 @@ const sessionOption = {
     cookie: {
         httpOnly: true,
         secure: true,
-        SameSite: None,
+        SameSite: 'None',
     },
 };
 if (prod) {
