@@ -58,6 +58,7 @@ const sessionOption = {
         httpOnly: true,
         secure: true,
         SameSite: 'None',
+        proxy: true,
     },
 };
 if (prod) {
