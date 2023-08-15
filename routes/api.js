@@ -775,25 +775,31 @@ router.post('/users', isNotLoggedIn, async (req, res, next) => {
 
 router.post('/users/login', isNotLoggedIn, (req, res, next) => {
     passport.authenticate('local', (err, user, info) => {
+        console.log('요청들어옴');
         if (err) {
+            console.log('여기1');
+
             console.error(err);
             return next(err);
         }
         if (info) {
+            console.log('여기2');
+
             return res.status(401).send(info.reason);
         }
         return req.login(user, async (loginErr) => {
             if (loginErr) {
+                console.log('여기3');
                 console.error(loginErr);
                 return next(loginErr);
             }
 
-            const user = await User.findOne({
+            const u = await User.findOne({
                 where: { id: user.id },
                 attributes: ['id', 'email'],
             });
 
-            console.log(user);
+            console.log('리턴값:', u.dataValues);
 
             return res.status(200).json(
                 await User.findOne({
