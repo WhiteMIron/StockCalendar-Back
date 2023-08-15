@@ -20,13 +20,6 @@ const { getWhereClause } = require('../util/search');
 const { parsing, calDiffPercent, calDiffPrice } = require('../util/stock');
 const { cmpToday, isEmpty } = require('../util/common');
 
-router.get('/test', async (req, res, next) => {
-    try {
-        res.status(200).send('hi');
-    } catch (error) {
-        next(error);
-    }
-});
 router.get('/record-all-search', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     const { startDate } = req.query;
@@ -794,6 +787,14 @@ router.post('/users/login', isNotLoggedIn, (req, res, next) => {
                 console.error(loginErr);
                 return next(loginErr);
             }
+
+            const user = await User.findOne({
+                where: { id: user.id },
+                attributes: ['id', 'email'],
+            });
+
+            console.log(user);
+
             return res.status(200).json(
                 await User.findOne({
                     where: { id: user.id },

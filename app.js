@@ -45,8 +45,8 @@ if (prod) {
         })
     );
 }
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// app.use(express.static(path.join(__dirname, 'public')));
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
@@ -67,9 +67,9 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 app.use('/api', apiRouter);
-app.get('*', (req, res, next) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// app.get('*', (req, res, next) => {
+//     res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// });
 
 const server = app.listen(app.get('PORT'), () => {
     console.log(`listening on port ${app.get('PORT')}`);
