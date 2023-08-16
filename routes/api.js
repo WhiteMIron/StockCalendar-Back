@@ -139,10 +139,6 @@ router.get('/category', isLoggedIn, async (req, res, next) => {
     }
 });
 
-router.get('/test', async (req, res, next) => {
-    res.status(200).send('hi');
-});
-
 router.get('/all-category', isLoggedIn, async (req, res, next) => {
     const { user } = req;
     try {
@@ -196,6 +192,15 @@ router.delete('/category/:id', isLoggedIn, async (req, res, next) => {
     const { id } = req.params;
 
     try {
+        const exStock = await Stock.findOne({
+            where: {
+                category_id: id,
+            },
+        });
+        if (exStock) {
+            return res.status(403).send('카테고리에 속한 종목이 없는 경우에만 삭제 가능합니다.');
+        }
+
         await Category.destroy({ where: { id: id, user_id: user.id } });
         res.status(200).send('ok');
     } catch (error) {
