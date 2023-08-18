@@ -197,6 +197,7 @@ router.delete('/category/:id', isLoggedIn, async (req, res, next) => {
                 category_id: id,
             },
         });
+
         if (exStock) {
             return res.status(403).send('카테고리에 속한 종목이 없는 경우에만 삭제 가능합니다.');
         }
